@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Hand Tracker</title>
+
+  <!-- MediaPipe scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
+    }
+    canvas {
+      margin-top: 10px;
+      border: 2px solid #ccc;
+      background: #000;
+    }
+    #stats {
+      margin-top: 20px;
+      font-size: 1.2em;
+      background: white;
+      display: inline-block;
+      padding: 10px 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    #videoUpload {
+      margin: 15px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>🏓 AI Hand Tracker</h1>
+  <p>Upload a video to analyze hand movements (works locally in your browser).</p>
+
+  <input type="file" id="videoUpload" accept="video/*" />
+  <br />
+  <video id="video" style="display:none;"></video>
+  <canvas id="output" width="640" height="480"></canvas>
+
+  <div id="stats">
+    👋 Left Hand Frames: <span id="leftCount">0</span><br />
+    ✋ Right Hand Frames: <span id="rightCount">0</span>
+  </div>
+
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("output");
+    const ctx = canvas.getContext("2d");
+    const leftCountEl = document.getElementById("leftCount");
+    const rightCountEl = document.getElementById("rightCount");
+
+    let leftCount = 0;
+    let rightCount = 0;
+
+    // MediaPipe Hands setup
+    const hands = new Hands({
+      locateFile: (file) =>
+        `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+    });
+
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7,
+    });
+
+    hands.onResults(onResults);
+
+    // Handle uploaded video
+    document.getElementById("videoUpload").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const url = URL.createObjectURL(file);
+        video.src = url;
+        video.load();
+        video.play();
+        processVideo();
+      }
+    });
+
+    async function processVideo() {
+      while (!video.paused && !video.ended) {
+        await hands.send({ image: video });
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+    }
+
+    function onResults(results) {
+      ctx.save();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
+      if (results.multiHandLandmarks && results.multiHandedness) {
+        for (let i = 0; i < results.multiHandLandmarks.length; i++) {
+          const classification = results.multiHandedness[i].label; // "Left" or "Right"
+          const landmarks = results.multiHandLandmarks[i];
+
+          if (classification === "Left") leftCount++;
+          else rightCount++;
+
+          drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: "#00FF00", lineWidth: 2 });
+          drawLandmarks(ctx, landmarks, { color: "#FF0000", lineWidth: 1 });
+        }
+      }
+
+      leftCountEl.textContent = leftCount;
+      rightCountEl.textContent = rightCount;
+      ctx.restore();
+    }
+  </script>
+</body>
+</html>
